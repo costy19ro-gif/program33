@@ -218,3 +218,111 @@ for m in meciuri:
             st.metric("1", c["1"], f"{int(p['p1']*100)}%")
             st.metric("X", c["X"], f"{int(p['px']*100)}%")
             st.metric("2", c["2"], f"{int(p['p2']*100)}%")
+
+# ─────────────────────────────────────────────
+# 5. BILETE SIGUR / COMBO / BOMBĂ – generate automat
+# ─────────────────────────────────────────────
+
+st.markdown("---")
+st.markdown("## 🎫 Bilete generate automat din predictii")
+
+# Funcție utilă pentru calcul cotă totală
+def cota_totala(lista_cote):
+    total = 1.0
+    for c in lista_cote:
+        total *= c
+    return round(total, 2)
+
+# ─────────────────────────────────────────────
+# BILET SIGUR
+# ─────────────────────────────────────────────
+if st.button("🎯 Generează Bilet SIGUR"):
+    sigur = []
+    for m in meciuri:
+        c = m["c"]
+        # cele mai sigure piețe
+        sigur.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "1X",
+            "cota": c["1X"]
+        })
+        sigur.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "H1 gol",
+            "cota": c["H1_goal"]
+        })
+        sigur.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "HG",
+            "cota": c["H_scores"]
+        })
+
+        if len(sigur) >= 10:  # limităm biletul sigur la 10 selecții
+            break
+
+    total = cota_totala([s["cota"] for s in sigur])
+
+    st.subheader(f"🎯 Bilet SIGUR – Cotă totală: {total}")
+    for s in sigur:
+        st.write(f"✔️ {s['meci']} ➜ {s['piata']} @ {s['cota']}")
+
+# ─────────────────────────────────────────────
+# BILET COMBO
+# ─────────────────────────────────────────────
+if st.button("🔥 Generează Bilet COMBO"):
+    combo = []
+    for m in meciuri:
+        c = m["c"]
+        # piețe medii
+        combo.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "GG",
+            "cota": c["GG"]
+        })
+        combo.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "+2.5",
+            "cota": c["O2_5"]
+        })
+
+        if len(combo) >= 6:  # 6 selecții combo
+            break
+
+    total = cota_totala([s["cota"] for s in combo])
+
+    st.subheader(f"🔥 Bilet COMBO – Cotă totală: {total}")
+    for s in combo:
+        st.write(f"⭐ {s['meci']} ➜ {s['piata']} @ {s['cota']}")
+
+# ─────────────────────────────────────────────
+# BILET BOMBĂ
+# ─────────────────────────────────────────────
+if st.button("💣 Generează Bilet BOMBĂ"):
+    bomba = []
+    for m in meciuri:
+        c = m["c"]
+        # piețe mari
+        bomba.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "GG + 2.5",
+            "cota": c["GG_O2_5"]
+        })
+        bomba.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "1 & GG",
+            "cota": c["1_GG"]
+        })
+        bomba.append({
+            "meci": f"{m['home']} vs {m['away']}",
+            "piata": "X",
+            "cota": c["X"]
+        })
+
+        if len(bomba) >= 6:  # 6 selecții bombă
+            break
+
+    total = cota_totala([s["cota"] for s in bomba])
+
+    st.subheader(f"💣 Bilet BOMBĂ – Cotă totală: {total}")
+    for s in bomba:
+        st.write(f"💥 {s['meci']} ➜ {s['piata']} @ {s['cota']}")
