@@ -37,7 +37,6 @@ def calculeaza_piete():
     p_o25 = 0.0
     p_h_scores = 0.0
     p_a_scores = 0.0
-    p_h1_goal = 0.0
 
     for i in range(7):
         for j in range(7):
@@ -96,7 +95,7 @@ def prob_to_cota(prob, marja=0.07):
     return round(1 / (prob * (1 + marja)), 2)
 
 # ─────────────────────────────────────────────
-# 3. Pregătire meciuri + piețe
+# 3. Pregătire meciuri + piețe (predictie pură)
 # ─────────────────────────────────────────────
 def pregateste_meciuri(raw):
     meciuri = []
@@ -143,9 +142,9 @@ def pregateste_meciuri(raw):
     return meciuri
 
 # ─────────────────────────────────────────────
-# 4. UI Streamlit
+# 4. UI Streamlit – tabel + carduri
 # ─────────────────────────────────────────────
-st.title("🎯 BetMachine Pro - Program33 Rapid (taca‑paca)")
+st.title("🎯 BetMachine Pro - Program33 Rapid (taca‑paca, predictie pură)")
 st.caption(f"Data: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 try:
@@ -158,12 +157,11 @@ meciuri_all = pregateste_meciuri(raw)
 
 st.success(f"Meciuri încărcate din scores24.json: {len(meciuri_all)}")
 
-# limităm la 21 meciuri pentru taca‑paca
+# SELECTĂM DIRECT PRIMELE 21 MECIURI – PREDICTIE PURĂ
 meciuri = meciuri_all[:21]
 
 st.markdown("## 🧱 Tabel TACA‑PACA (21 meciuri × piețe)")
 
-# construim tabelul
 tabel_data = []
 for m in meciuri:
     row = {
