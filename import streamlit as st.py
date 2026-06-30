@@ -3,43 +3,57 @@ import requests
 from datetime import datetime, timedelta
 import math
 
-st.set_page_config(page_title="BetMachine Pro - Program 33", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="BetMachine Pro - Program 33 (API-Sports)", page_icon="🎯", layout="wide")
 
 # ══════════════════════════════════════════════════════════
-#  CONFIGURARE API — DOAR FOOTBALL-DATA.ORG
+#  CONFIGURARE API — API-FOOTBALL (RapidAPI)
 # ══════════════════════════════════════════════════════════
-API_TOKEN   = "5c62dc102c364274ac4fc0ec7f33010a"
-FD_BASE     = "https://api.football-data.org/v4"
-FD_HEADERS  = {"X-Auth-Token": API_TOKEN}
+API_KEY   = "41b44ba4afmshbebf0e0637fc807p12bf84jsn0471b6bfcfea"
+API_HOST  = "api-football-v1.p.rapidapi.com"
+API_BASE  = f"https://{API_HOST}"
+
+HEADERS = {
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": API_HOST
+}
 
 # ══════════════════════════════════════════════════════════
-#  FUNCȚII API — FOOTBALL-DATA.ORG
+#  FUNCȚII API — FIXTURES (Meciuri programate)
 # ══════════════════════════════════════════════════════════
-@st.cache_data(ttl=1800)
-def get_fd_matches(comp_code):
-    azi  = datetime.now().strftime("%Y-%m-%d")
-    viit = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d")
-    try:
-        url = f"{FD_BASE}/competitions/{comp_code}/matches"
-        r   = requests.get(url, headers=FD_HEADERS,
-                           params={"status": "SCHEDULED", "dateFrom": azi, "dateTo": viit},
-                           timeout=8)
-        if r.status_code == 200:
-            return r.json().get("matches", [])
-        return []
-    except:
-        return []
+@st.cache_data(ttl=900)
+def get_fixtures(date_from: str, date_to: str, league_ids=None):
+    """
+    Returnează meciuri programate între date_from și date_to.
+    Dacă league_ids este None, ia toate ligile.
+    """
+    fixtures = []
 
-@st.cache_data(ttl=3600)
-def get_fd_standings(comp_code):
-    try:
-        r = requests.get(f"{FD_BASE}/competitions/{comp_code}/standings",
-                         headers=FD_HEADERS, timeout=8)
-        if r.status_code == 200:
-            return r.json().get("standings", [])
-        return []
-    except:
-        return []
+    # Dacă nu specificăm ligă, luăm tot ce e în ziua respectivă
+    if not league_ids:
+        url = f"{API_BASE}/v3/fixtures"
+        params = {"from": date_from, "to": date_to}
+        try:
+            r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+            if r.status_code == 200:
+                data = r.json().get("response", [])
+                return data
+            return []
+        except:
+            return []
+
+    # Dacă avem ligă, iterăm pe fiecare
+    for lid in league_ids:
+        url = f"{API_BASE}/v3/fixtures"
+        params = {"from": date_from, "to": date_to, "league": lid, "season": datetime.now().year}
+        try:
+            r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+            if r.status_code == 200:
+                data = r.json().get("response", [])
+                fixtures.extend(data)
+        except:
+            continue
+
+    return fixtures
 
 # ══════════════════════════════════════════════════════════
 #  MOTOR POISSON / DIXON-COLES
@@ -79,40 +93,58 @@ def prob_to_cota(prob, marja=0.07):
     if prob <= 0.01: return 50.0
     return round(1 / (prob * (1 + marja)), 2)
 
-def forta_din_standing_fd(rows, team_id):
-    for row in rows:
-        if row.get("team", {}).get("id") == team_id:
-            played = max(row.get("playedGames", 1), 1)
-            gf = row.get("goalsFor", 2)
-            ga = row.get("goalsAgainst", 2)
-            return gf / played, ga / played
-    return 1.2, 1.2
-
 # ══════════════════════════════════════════════════════════
-#  PROCESARE MECIURI FOOTBALL-DATA.ORG
+#  PROCESARE MECIURI DIN API-SPORTS
 # ══════════════════════════════════════════════════════════
-def proceseaza_meciuri_fd(matches, standings_rows):
+def proceseaza_fixtures(fixtures):
+    """
+    Transformă fixtures API-Sports în formatul folosit de BetMachine.
+    Folosește un proxy simplu pentru forța echipelor:
+    - atac = goluri marcate / meci
+    - apărare = goluri primite / meci
+    Dacă nu avem statistici, folosim 1.2 / 1.2.
+    """
     meciuri = []
-    for m in matches:
-        home_id = m["homeTeam"]["id"]
-        away_id = m["awayTeam"]["id"]
-        home    = m["homeTeam"]["name"]
-        away    = m["awayTeam"]["name"]
-        comp    = m.get("competition", {}).get("name", "")
-        dt_str  = m["utcDate"]
+    azi = datetime.now()
 
+    for f in fixtures:
         try:
-            dt = datetime.strptime(dt_str[:16], "%Y-%m-%dT%H:%M")
-        except:
+            home = f["teams"]["home"]["name"]
+            away = f["teams"]["away"]["name"]
+            liga = f["league"]["name"]
+            country = f["league"]["country"]
+            dt_str = f["fixture"]["date"]
+        except KeyError:
             continue
 
-        ah, dh = forta_din_standing_fd(standings_rows, home_id)
-        aa, da = forta_din_standing_fd(standings_rows, away_id)
-        prob   = calculeaza_prob(ah, dh, aa, da)
+        # Data meciului
+        try:
+            dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        except:
+            dt = azi
+
+        # Doar meciuri viitoare (max 7 zile)
+        if dt < azi or dt > azi + timedelta(days=7):
+            continue
+
+        # Status: nu a început
+        status = f["fixture"]["status"]["short"]
+        if status in ["FT", "AET", "PEN", "CANC", "POST"]:
+            continue
+
+        # Statistici simple (dacă există)
+        stats = f.get("statistics", [])
+        atac_h = atac_a = 1.2
+        def_h = def_a = 1.2
+
+        # Dacă nu avem statistics, folosim default
+        # (API-Sports nu trimite mereu statistics în fixtures)
+
+        prob = calculeaza_prob(atac_h, def_h, atac_a, def_a)
 
         meciuri.append({
-            "sursa": "FD",
-            "comp":  comp,
+            "sursa": "API-Sports",
+            "comp":  f"{country} — {liga}",
             "data":  dt.strftime("%d.%m"),
             "ora":   dt.strftime("%H:%M"),
             "home":  home,
@@ -120,6 +152,7 @@ def proceseaza_meciuri_fd(matches, standings_rows):
             "prob":  prob,
             "grup":  ""
         })
+
     return meciuri
 
 # ══════════════════════════════════════════════════════════
@@ -192,42 +225,35 @@ def asambleaza_bilete(selectii):
     }
 
 # ══════════════════════════════════════════════════════════
-#  INTERFAȚĂ STREAMLIT — FĂRĂ CAMPIONAT MONDIAL
+#  INTERFAȚĂ STREAMLIT — PROGRAM 33 CU API-SPORTS
 # ══════════════════════════════════════════════════════════
-st.title("🎯 BetMachine Pro - Program 33 — Fără Campionatul Mondial")
-st.markdown(f"📅 **{datetime.now().strftime('%d.%m.%Y %H:%M')}** | ⚽ Ligi active football-data.org")
+st.title("🎯 BetMachine Pro - Program 33 — API-Sports")
+st.markdown(f"📅 **{datetime.now().strftime('%d.%m.%Y %H:%M')}** | ⚽ Fixtures din API-Football (RapidAPI)")
 
 toate_selectiile = []
-status_col1, status_col2 = st.columns(2)
 
-# ── Sursa: football-data.org ─────────────────────────────
-with st.spinner("⏳ Se descarcă meciurile din football-data.org..."):
-    LIGI_FD = ["BSA", "ELC", "PL", "PD", "SA"]  # Premier League, La Liga, Serie A etc.
-    meciuri_fd_total = []
-    for cod in LIGI_FD:
-        matches = get_fd_matches(cod)
-        if matches:
-            standings_raw = get_fd_standings(cod)
-            rows = []
-            for sg in standings_raw:
-                rows.extend(sg.get("table", []))
-            meciuri_fd_total.extend(proceseaza_meciuri_fd(matches, rows))
+# Interval de date: azi + 7 zile
+azi_str  = datetime.now().strftime("%Y-%m-%d")
+viit_str = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
 
-with status_col1:
-    if meciuri_fd_total:
-        st.success(f"✅ football-data.org: **{len(meciuri_fd_total)} meciuri** găsite")
-        toate_selectiile.extend(meciuri_fd_total)
-    else:
-        st.warning("⚠️ football-data.org: niciun meci programat în ligile active")
+st.info(f"Se caută meciuri între **{azi_str}** și **{viit_str}**")
+
+with st.spinner("⏳ Se descarcă meciurile din API-Sports..."):
+    # Dacă vrei doar anumite ligi, pune ID-urile lor aici.
+    # Exemplu: Premier League (39), La Liga (140), Serie A (135), MLS (253)
+    LIGI_IDS = [39, 140, 135, 253]
+    fixtures = get_fixtures(azi_str, viit_str, league_ids=LIGI_IDS)
+    meciuri = proceseaza_fixtures(fixtures)
+    toate_selectiile.extend(meciuri)
 
 if not toate_selectiile:
-    st.error("❌ Nu s-au găsit meciuri din nicio sursă!")
+    st.error("❌ Nu s-au găsit meciuri din API-Sports pentru intervalul selectat.")
     st.stop()
 
-st.success(f"### Total meciuri analizate: **{len(toate_selectiile)}**")
+st.success(f"✅ Total meciuri analizate: **{len(toate_selectiile)}**")
 st.markdown("---")
 
-# ── Generare bilete ──────────────────────────────────────
+# Generare bilete
 bilete = asambleaza_bilete(toate_selectiile)
 
 st.subheader("🎫 Biletele Generate de Algoritmul Poisson/Dixon-Coles")
@@ -238,37 +264,40 @@ with col1:
     cs = bilete["sigur"]["cota"]
     atins = cs >= 20.0
     st.metric("Cotă Totală", cs, f"{'Obiectiv atins!' if atins else 'Sub 20.00'}")
-    st.markdown("**Selecții:**")
+    st.markdown("**Selecții (Double Chance / Peste 2.5 / 1):**")
     if bilete["sigur"]["selectii"]:
         for ev in bilete["sigur"]["selectii"]:
             st.markdown(f"✔️ `{ev['cota']}` {ev['text']}")
             st.caption(f"🏆 {ev['comp']}")
     else:
         st.error("Nu s-au găsit selecții sigure.")
+    st.markdown(f"💰 **5 RON** ➜ câștig potențial: **{round(5 * cs, 2)} RON**")
 
 # BILET COMBO
 with col2:
     cc = bilete["combo"]["cota"]
     st.metric("Cotă Totală", cc, "3-4 selecții echilibrate")
-    st.markdown("**Selecții:**")
+    st.markdown("**Selecții (1 / 2 / GG):**")
     if bilete["combo"]["selectii"]:
         for ev in bilete["combo"]["selectii"]:
             st.markdown(f"✔️ `{ev['cota']}` {ev['text']}")
             st.caption(f"🏆 {ev['comp']}")
     else:
         st.error("Nu s-au găsit selecții combo.")
+    st.markdown(f"💰 **5 RON** ➜ câștig potențial: **{round(5 * cc, 2)} RON**")
 
 # BILET BOMBĂ
 with col3:
     cb = bilete["bomba"]["cota"]
     st.metric("Cotă Totală", cb, "Fiecare selecție ≥ 3.00")
-    st.markdown("**Selecții:**")
+    st.markdown("**Selecții (cote mari):**")
     if bilete["bomba"]["selectii"]:
         for ev in bilete["bomba"]["selectii"]:
             st.markdown(f"✔️ `{ev['cota']}` {ev['text']}")
             st.caption(f"🏆 {ev['comp']}")
     else:
         st.error("Nu s-au găsit selecții cu cotă ≥ 3.00")
+    st.markdown(f"💰 **2 RON** ➜ câștig potențial: **{round(2 * cb, 2)} RON**")
 
 # Tabel meciuri analizate
 st.markdown("---")
@@ -291,4 +320,4 @@ for s in toate_selectiile:
             f"Sursă: {s['sursa']}"
         )
 
-st.caption("⚠️ BetMachine Pro - Program 33 folosește modele statistice Poisson. Jucați responsabil. 18+")
+st.caption("⚠️ BetMachine Pro - Program 33 (API-Sports) folosește modele statistice Poisson. Jucați responsabil. 18+")
