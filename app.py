@@ -36,3 +36,5 @@ st.write(bilet_bomba)
 
 st.subheader("Biletul Miliardar")
 st.write(bilet_miliardar)
+st.write("Număr meciuri filtrate:", len(df_filtered))
+st.dataframe(df_filtered.head())
