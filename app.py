@@ -12,31 +12,37 @@ if not os.path.exists(cale_fisier):
 
 meciuri_valide = 0
 
-# Citire linie cu linie (Ultra-rapidă, consum zero de memorie RAM)
 with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
     for linie in f:
-        # Împărțim linia prin virgulă
         parti = [p.strip() for p in linie.split(",")]
         
-        # Un rând complet trebuie să aibă minimum 60-65 de coloane
         if len(parti) < 60:
             continue
             
         try:
-            # Extragere valori statistice din coloane (Ajustate la indexul din Python: col - 1)
-            home_played = int(parti[50]) if parti[50].isdigit() else 0  # col51
-            away_played = int(parti[51]) if parti[51].isdigit() else 0  # col52
+            # 1. Extragere meciuri jucate (col51 pentru Gazde, col52 pentru Oaspeți)
+            home_played = int(parti[50]) if parti[50].isdigit() else 0  
+            away_played = int(parti[51]) if parti[51].isdigit() else 0  
             
-            try:
-                cota_1 = float(parti[19])  # col20
-            except ValueError:
-                cota_1 = 0.0
+            # Sari peste meciurile care nu au destul istoric (minim 6 meciuri)
+            if home_played < 6 or away_played < 6:
+                continue
 
-            # Aplicarea filtrelor tale stricte
-            if home_played >= 6 and away_played >= 6 and cota_1 >= 1.28:
+            # 2. Extragere cote pentru verificare din ambele piețe (Piața A vs Piața B)
+            try:
+                cota_piata_A = float(parti[19]) if parti[19] else 0.0 # col20
+                cota_piata_B = float(parti[34]) if parti[34] else 0.0 # col35
+            except ValueError:
+                cota_piata_A, cota_piata_B = 0.0, 0.0
+
+            # Luăm cea mai mare cotă găsită pentru echipa favorită ca să vedem dacă trece de pragul de 1.28
+            cota_maxima_favorit = max(cota_piata_A, cota_piata_B)
+
+            # 3. Aplicarea filtrului de cotă minimă 1.28
+            if cota_maxima_favorit >= 1.28:
                 meciuri_valide += 1
                 
-                # Afișare directă în pagină
+                # Afișare meci formatat curat
                 st.markdown(f"### 🏟️ {parti[0]} | {parti[1]} | **{parti[2]}** vs **{parti[3]}**")
                 
                 c1, c2, c3, c4 = st.columns(4)
@@ -51,9 +57,9 @@ with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
                     st.write(f"HT (1 / X): `{parti[48]}` / `{parti[49]}`")
                     st.write(f"FT (1 / X / 2): `{parti[13]}` / `{parti[14]}` / `{parti[15]}`")
                 with c3:
-                    st.markdown("**💰 Cote Pariuri (Piața A)**")
-                    st.write(f"1: `{parti[19]}` | X: `{parti[20]}` | 2: `{parti[21]}`")
-                    st.write(f"1X: `{parti[22]}` | 12: `{parti[23]}` | X2: `{parti[24]}`")
+                    st.markdown("**💰 Cote Pariuri**")
+                    st.write(f"Piața A (col20): `{parti[19]}` | Piața B (col35): `{parti[34]}`")
+                    st.write(f"Șansă Dublă X2: `{parti[24]}` | 12: `{parti[23]}`")
                 with c4:
                     st.markdown("**⚽ Linii Goluri & Istoric**")
                     st.write(f"Sugestie Goluri: `{parti[11]}` (Încredere: `{parti[17]}`)")
