@@ -56,3 +56,5 @@ with st.container():
     else:
         st.table(bomba_df)
     st.write("💰 2 RON ➜ câștig potențial: {:.1f} RON".format(bomba_total * 2))
+    st.write("Număr meciuri filtrate:", len(df_filtered))
+    st.dataframe(df_filtered.head())
