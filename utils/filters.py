@@ -2,8 +2,8 @@ import pandas as pd
 
 def filter_matches(df):
     # Convertim AX și AY la numere
-    df["col50"] = pd.to_numeric(df["col50"].astype(str).strip(), errors="coerce").fillna(0)
-    df["col51"] = pd.to_numeric(df["col51"].astype(str).strip(), errors="coerce").fillna(0)
+    df["col50"] = pd.to_numeric(df["col50"].astype(str).str.strip(), errors="coerce").fillna(0)
+    df["col51"] = pd.to_numeric(df["col51"].astype(str).str.strip(), errors="coerce").fillna(0)
 
     # Regula AX/AY > 6
     df = df[(df["col50"] > 6) & (df["col51"] > 6)]
@@ -11,7 +11,7 @@ def filter_matches(df):
     # Convertim coloanele folosite la calcule
     numeric_cols = ["col9", "col11", "col15", "col16", "col17", "col19"]
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col].astype(str).strip(), errors="coerce").fillna(0)
+        df[col] = pd.to_numeric(df[col].astype(str).str.strip(), errors="coerce").fillna(0)
 
     # Regula probabilități HT/FT
     df = df[
