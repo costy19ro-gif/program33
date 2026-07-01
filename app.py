@@ -8,7 +8,9 @@ from utils.predictions import (
     generate_bilet_bomba
 )
 
-st.title("BetMachine Pro 55 ULTRA – Generator de Bilete")
+st.set_page_config(page_title="BetMachine Pro 55 ULTRA", layout="wide")
+
+st.title("🎫 Biletele Generate de Algoritmul Poisson/Dixon-Coles")
 
 @st.cache_data
 def load_data():
@@ -17,34 +19,40 @@ def load_data():
 df = load_data()
 df_filtered = filter_matches(df)
 
-# --- Biletul Miliardar ---
-st.subheader("Biletul Miliardar")
-if st.button("Generează Biletul Miliardar"):
-    tickets = generate_predictions(df_filtered)
-    for t in tickets:
-        st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+# --- BILET SIGUR ---
+sigur = generate_bilet_sigur(df_filtered)
+sigur_df = pd.DataFrame(sigur)
+sigur_total = round(len(sigur_df) * 1.35, 2)  # exemplu calcul cota totală
 
-# --- Bilet SIGUR ---
-st.subheader("Bilet SIGUR")
-if st.button("Generează Bilet SIGUR"):
-    sigur = generate_bilet_sigur(df_filtered)
-    for t in sigur:
-        st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+with st.container():
+    st.markdown("### 🟡 BILET SIGUR")
+    st.write(f"**Cota totală:** {sigur_total}")
+    st.write("🔼 Sub 20.00")
+    st.table(sigur_df)
+    st.write("💰 5 RON ➜ câștig potențial: {:.1f} RON".format(sigur_total * 5))
 
-# --- Bilet COMBO ---
-st.subheader("Bilet COMBO")
-if st.button("Generează Bilet COMBO"):
-    combo = generate_bilet_combo(df_filtered)
-    for t in combo:
-        st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+# --- BILET COMBO ---
+combo = generate_bilet_combo(df_filtered)
+combo_df = pd.DataFrame(combo)
+combo_total = round(len(combo_df) * 2.25, 2)
 
-# --- Bilet BOMBĂ ---
-st.subheader("Bilet BOMBĂ")
-if st.button("Generează Bilet BOMBĂ"):
-    bomba = generate_bilet_bomba(df_filtered)
-    for t in bomba:
-        st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+with st.container():
+    st.markdown("### 🔵 BILET COMBO VALUE")
+    st.write(f"**Cota totală:** {combo_total}")
+    st.write("🔼 3–4 selecții echilibrate")
+    st.table(combo_df)
+    st.write("💰 5 RON ➜ câștig potențial: {:.1f} RON".format(combo_total * 5))
 
-# --- Meciuri filtrate ---
-st.subheader("Meciuri filtrate")
-st.dataframe(df_filtered)
+# --- BILET BOMBĂ ---
+bomba = generate_bilet_bomba(df_filtered)
+bomba_df = pd.DataFrame(bomba)
+bomba_total = round(len(bomba_df) * 3.00, 2)
+
+with st.container():
+    st.markdown("### 🔴 BILET BOMBĂ")
+    st.write(f"**Cota totală:** {bomba_total}")
+    if bomba_total < 3:
+        st.warning("Nu s-au găsit selecții cu cotă ≥ 3.00")
+    else:
+        st.table(bomba_df)
+    st.write("💰 2 RON ➜ câștig potențial: {:.1f} RON".format(bomba_total * 2))
