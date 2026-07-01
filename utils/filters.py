@@ -15,11 +15,11 @@ def filter_matches(df):
 
     # Regula probabilități HT/FT
     df = df[
-        (df["col9"] + df["col11"] > 0.40) &
-        (df["col15"] > 0.25) &
-        (df["col16"] > 0.35) &
-        (df["col17"] > 0.20) &
-        (df["col19"] > 0.75)
+        (df["col9"] + df["col11"] > 0.30) &
+        (df["col15"] > 0.20) &
+        (df["col16"] > 0.25) &
+        (df["col17"] > 0.15) &
+        (df["col19"] > 0.60)
     ]
 
     return df
