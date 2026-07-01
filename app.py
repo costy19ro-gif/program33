@@ -1,8 +1,9 @@
+import csv
 import os
 import streamlit as st
 
-st.set_page_config(page_title="Program33 - Predictor", layout="wide")
-st.title("⚽ Predicții Meciuri - Stil Program33")
+st.set_page_config(page_title="Program33 - Generator Profit", layout="wide")
+st.title("⚽ Bilete Automate de Profit - Stil Program44")
 
 cale_fisier = "scores24.csv"
 
@@ -10,103 +11,136 @@ if not os.path.exists(cale_fisier):
     st.error(f"Nu am găsit fișierul '{cale_fisier}' în GitHub!")
     st.stop()
 
-# Setări Filtrare în Meniul Lateral (Sidebar)
-st.sidebar.header("🔧 Setări Filtrare")
-activare_filtre = st.sidebar.checkbox("Activează filtrele stricte", value=True)
-cota_minima_input = st.sidebar.number_input("Cotă minimă favorit", min_value=1.0, max_value=5.0, value=1.28, step=0.01)
-meciuri_minime_input = st.sidebar.number_input("Min. meciuri jucate (AX/AY)", min_value=1, max_value=30, value=6)
+# Liste pentru cele 3 strategii de bilet
+selectii_combo = []       # Strategia 1: Șansă Dublă / Peste 1.5
+selectii_echilibrat = []  # Strategia 2: Peste 2.5 goluri (Coloana AR)
+selectii_bomba = []       # Strategia 3: Peste 3.5 goluri (Coloana AT)
 
-meciuri_valide = 0
-total_meciuri_fisier = 0
-
-# Deschidem fișierul text simplu ca să evităm crăparea librăriei de CSV
 with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
-    for linie in f:
-        # Curățăm linia de ghilimele ornamentale create de scraper
-        linie_curata = linie.replace('", "', ',').replace('",', ',').replace(',"', ',').replace('"', '')
-        parti = [p.strip() for p in linie_curata.split(",") if p.strip()]
-        
-        # Un rând valid din datele tale conține zeci de coloane
-        if len(parti) < 30:
+    cititor_csv = csv.reader(f, delimiter=',', quotechar='"')
+    
+    for row in cititor_csv:
+        row = [c.strip() for c in row if c is not None]
+        # Un rând stabil trebuie să aibă suficiente coloane pentru a prinde AT (coloana 46+)
+        if len(row) < 55:
             continue
             
-        total_meciuri_fisier += 1
-        
         try:
-            # Extragerea sigură a datelor de identificare (primele coloane)
-            liga = parti[0]
-            data_ora = parti[1]
-            gazde = parti[2]
-            oaspeti = parti[3]
+            # 1. Date Generale Meci
+            liga = row[0]
+            data_ora = row[1]
+            gazde = row[2]
+            oaspeti = row[3]
+            nume_meci = f"{gazde} vs {oaspeti}"
             
-            # Căutăm dinamic meciurile jucate (ultimele numere întregi din listă)
-            numere_gasite = [int(x) for x in parti if x.isdigit()]
+            # 2. Istoric meciuri (Ultimele elemente pentru siguranță)
+            home_played = int(row[-3]) if row[-3].isdigit() else 0
+            away_played = int(row[-2]) if row[-2].isdigit() else 0
             
-            # În mod normal, ultimele valori sunt meciurile jucate (AX și AY)
-            home_played = numere_gasite[-2] if len(numere_gasite) >= 2 else 0
-            away_played = numere_gasite[-1] if len(numere_gasite) >= 2 else 0
+            # FILTRU DE AUR: Dacă nu au minim 6 meciuri jucate în sezon, e la ghici. Îl tăiem!
+            if home_played < 6 or away_played < 6:
+                continue
+                
+            # 3. Extragere Cote Corecte conform tabelelor tale:
+            # col20 (U) = Cota 1 | col23 (X) = Cota 1X | col25 (AA) = Cota X2
+            cota_1 = float(row[19]) if row[19].replace('.', '', 1).isdigit() else 0.0
+            cota_2 = float(row[21]) if row[21].replace('.', '', 1).isdigit() else 0.0
+            cota_1x = float(row[22]) if row[22].replace('.', '', 1).isdigit() else 1.25
+            cota_x2 = float(row[24]) if row[24].replace('.', '', 1).isdigit() else 1.25
             
-            # Căutăm dinamic cotele din meci (numere cu virgulă / float)
-            cote_gasite = []
-            for x in parti:
-                try:
-                    val = float(x)
-                    if 1.01 <= val <= 50.0 and not val.is_integer():
-                        cote_gasite.append(val)
-                except ValueError:
-                    continue
-            
-            # Prima cotă din listă este de regulă cota echipei favorite (col20)
-            cota_favorit = cote_gasite[0] if cote_gasite else 0.0
+            # MAPPING COLOANE SOLICITATE DE TINE:
+            # În indexarea Python de la 0, col44 (AR) = index 43, col46 (AT) = index 45
+            cota_peste_2_5 = float(row[43]) if row[43].replace('.', '', 1).isdigit() else 0.0  # Coloana AR
+            cota_peste_3_5 = float(row[45]) if row[45].replace('.', '', 1).isdigit() else 0.0  # Coloana AT
 
-            # Extragere predictii scoruri (FT / HT)
-            scor_ft_1 = parti[6] if len(parti) > 6 else "N/A"
-            scor_ft_2 = parti[8] if len(parti) > 8 else "N/A"
-            pred_ft = parti[10] if len(parti) > 10 else "N/A"
-            linie_gol = parti[11] if len(parti) > 11 else "N/A"
-            
-            # 🛠️ APLICARE FILTRE SOLICITATE
-            if activare_filtre:
-                if home_played < meciuri_minime_input or away_played < meciuri_minime_input:
-                    continue
-                if cota_favorit < cota_minima_input:
-                    continue
+            # Determinăm cine e echipa favorită în meci
+            if cota_1 > 1.01 and cota_1 < cota_2:
+                sansa_dubla_favorit = "1X"
+                cota_sd = cota_1x
+            else:
+                sansa_dubla_favorit = "X2"
+                cota_sd = cota_x2
 
-            meciuri_valide += 1
-            
-            # Afișarea meciului în stilul grafic dorit
-            with st.container():
-                st.markdown(f"### 🏟️ {liga} | {data_ora} | **{gazde}** vs **{oaspeti}**")
-                
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.markdown("**🎯 Scoruri Probabile**")
-                    st.write(f"Scor FT principal: `{scor_ft_1}`")
-                    st.write(f"Scor FT secundar: `{scor_ft_2}`")
-                    st.write(f"Predicție meci: `{pred_ft}`")
-                with c2:
-                    st.markdown("**📊 Detalii Algoritm**")
-                    st.write(f"Linie Goluri propusă: `{linie_gol}`")
-                    st.write(f"Evaluare siguranță: `Stabil`")
-                with c3:
-                    st.markdown("**💰 Cote Pariuri Detectate**")
-                    st.write(f"Cotă Favorit estimată: `{cota_favorit if cota_favorit > 0 else 'N/A'}`")
-                    if len(cote_gasite) > 2:
-                        st.write(f"Alte cote din meci: `{cote_gasite[1]}` / `{cote_gasite[2]}`")
-                with c4:
-                    st.markdown("**⚽ Istoric Meciuri Jucate**")
-                    st.write(f"Meciuri Gazde (AX): **{home_played}**")
-                    st.write(f"Meciuri Oaspeți (AY): **{away_played}**")
-                
-                st.markdown("<hr style='margin:12px 0px; border-top:1px dashed #bbb;'/>", unsafe_allow_html=True)
-                
+            # --- STRATEGIA 1: BILET COMBO (Siguranță 95%) ---
+            # Căutăm cote de siguranță la șansă dublă sau meciuri clare de peste 1.5 goluri
+            if 1.18 <= cota_sd <= 1.45:
+                selectii_combo.append({
+                    "meci": nume_meci, "info": f"{data_ora} | {liga}",
+                    "pariu": f"{sansa_dubla_favorit} & Peste 1.5 Goluri", "cota": cota_sd
+                })
+
+            # --- STRATEGIA 2: BILET ECHILIBRAT (Profit din Coloana AR -> Peste 2.5) ---
+            # Dacă cota la Peste 2.5 din coloana AR este într-o zonă profitabilă (ex: 1.50 - 2.15)
+            if 1.50 <= cota_peste_2_5 <= 2.15:
+                selectii_echilibrat.append({
+                    "meci": nume_meci, "info": f"{data_ora} | {liga}",
+                    "pariu": "Peste 2.5 Goluri (AR)", "cota": cota_peste_2_5
+                })
+
+            # --- STRATEGIA 3: BILET BOMBĂ (Cote Mari din Coloana AT -> Peste 3.5) ---
+            # Vânăm cotele mari de peste 3.5 goluri (coloana AT) doar la meciurile cu potențial uriaș
+            if cota_peste_3_5 >= 2.20:
+                selectii_bomba.append({
+                    "meci": nume_meci, "info": f"{data_ora} | {liga}",
+                    "pariu": "Peste 3.5 Goluri (AT)", "cota": cota_peste_3_5
+                })
+
         except Exception:
             continue
 
-# Panou de statistici în sidebar
-st.sidebar.markdown("---")
-st.sidebar.metric(label="Total meciuri în fișier", value=total_meciuri_fisier)
-st.sidebar.metric(label="Meciuri afișate pe ecran", value=meciuri_valide)
+# 📊 CONFIGURARE PANEL VIZUAL PE 3 COLOANE (STIL PROGRAM44)
+col1, col2, col3 = st.columns(3)
 
-if meciuri_valide == 0 and total_meciuri_fisier > 0:
-    st.info("Sistemul a curățat fișierul, dar niciun meci nu trece de filtre. Dezactivează căsuța 'Activează filtrele stricte' din stânga pentru a le vedea pe toate.")
+with col1:
+    st.subheader("📋 1. Bilet Combo (Sigur)")
+    cota_combo = 1.0
+    for s in selectii_combo[:6]:  # Limităm la 6 cele mai bune meciuri
+        cota_combo *= s["cota"]
+        
+    st.markdown(f"### Cotă Totală: `{cota_combo:.2f}`")
+    st.caption("🎯 Strategia de rulaj: Șanse duble și goluri minime.")
+    st.markdown("---")
+    
+    for s in selectii_combo[:6]:
+        st.markdown(f"🟢 **{s['cota']:.2f}** | {s['meci']} ➡️ `{s['pariu']}`")
+        
+    if selectii_combo:
+        st.warning(f"💵 Miza recomandată: **50 RON**\n\n💰 Câștig Potențial: **{50 * cota_combo:.2f} RON**")
+    else:
+        st.info("Fără selecții Combo sigure în acest moment.")
+
+with col2:
+    st.subheader("⚖️ 2. Bilet Echilibrat (AR)")
+    cota_echilibrat = 1.0
+    for s in selectii_echilibrat[:4]:  # 4 meciuri cu Peste 2.5 goluri sunt ideale
+        cota_echilibrat *= s["cota"]
+        
+    st.markdown(f"### Cotă Totală: `{cota_echilibrat:.2f}`")
+    st.caption("⚽ Strategia de bază: Peste 2.5 goluri extrase curat din coloana AR.")
+    st.markdown("---")
+    
+    for s in selectii_echilibrat[:4]:
+        st.markdown(f"🟡 **{s['cota']:.2f}** | {s['meci']} ➡️ `{s['pariu']}`")
+        
+    if selectii_echilibrat:
+        st.success(f"💵 Miza recomandată: **30 RON**\n\n💰 Câștig Potențial: **{30 * cota_echilibrat:.2f} RON**")
+    else:
+        st.info("Niciun meci nu are o cotă stabilă de Peste 2.5 în coloana AR.")
+
+with col3:
+    st.subheader("💣 3. Bilet Cote Mari (AT)")
+    cota_bomba = 1.0
+    for s in selectii_bomba[:3]:  # Maxim 3 „bombe” pe bilet ca să nu stricăm șansele
+        cota_bomba *= s["cota"]
+        
+    st.markdown(f"### Cotă Totală: `{cota_bomba:.2f}`")
+    st.caption("🚀 Strategia speculativă: Peste 3.5 goluri din coloana AT la meciuri spectacol.")
+    st.markdown("---")
+    
+    for s in selectii_bomba[:3]:
+        st.markdown(f"🔥 **{s['cota']:.2f}** | {s['meci']} ➡️ `{s['pariu']}`")
+        
+    if selectii_bomba:
+        st.error(f"💵 Miza recomandată: **10 RON**\n\n💰 Câștig Potențial: **{10 * cota_bomba:.2f} RON**")
+    else:
+        st.info("Niciun meci nu are o cotă destul de mare de Peste 3.5 în coloana AT.")
