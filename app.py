@@ -8,7 +8,14 @@ def load_data():
     return pd.read_csv("scores24.csv")
 
 def filter_matches(df):
+    # Convertim coloanele la numere
+    df["col50"] = pd.to_numeric(df["col50"], errors="coerce")
+    df["col51"] = pd.to_numeric(df["col51"], errors="coerce")
+
+    # Regula AX/AY > 6
     df = df[(df["col50"] > 6) & (df["col51"] > 6)]
+
+    # Regula probabilități HT/FT
     df = df[
         (df["col9"] + df["col11"] > 0.40) &
         (df["col15"] > 0.25) &
@@ -16,13 +23,13 @@ def filter_matches(df):
         (df["col17"] > 0.20) &
         (df["col19"] > 0.75)
     ]
+
     return df
 
 def generate_predictions(df):
     tickets = []
 
     for _, row in df.iterrows():
-
         if row["col8"] == "0-0" and row["col11"] > 0.18:
             pick = "O0.5 HT"
         elif row["col9"] + row["col11"] > 0.45:
