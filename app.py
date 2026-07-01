@@ -20,6 +20,7 @@ with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
     cititor_csv = csv.reader(f, delimiter=',', quotechar='"')
     
     for row in cititor_csv:
+        # Curățăm elementele goale sau spațiile de pe fiecare rând
         row = [c.strip() for c in row if c is not None and c.strip()]
         if len(row) < 15:
             continue
@@ -38,7 +39,12 @@ with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
             nume_meci = f"{gazde} vs {oaspeti}"
             detalii = f"{data_ora} | {liga}"
             
-            # 2. Extragem numerele cu virgulă din rând pentru cote
+            # 2. Căutăm dinamic meciurile jucate (ultimele numere întregi din listă)
+            numere_gasite = [int(x) for x in row if x.isdigit()]
+            home_played = numere_gasite[-2] if len(numere_gasite) >= 2 else 0
+            away_played = numere_gasite[-1] if len(numere_gasite) >= 2 else 0
+            
+            # 3. Extragem numerele cu virgulă din rând pentru cote
             toate_numerele = []
             for element in row:
                 try:
@@ -51,7 +57,7 @@ with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
             if len(toate_numerele) < 5:
                 continue
 
-            # 3. Alocare și calibrare cote
+            # 4. Alocare și calibrare cote
             cote_meci = [n for n in toate_numerele if 1.05 <= n <= 15.0]
             
             if len(cote_meci) >= 3:
@@ -74,40 +80,47 @@ with open(cale_fisier, "r", encoding="utf-8", errors="ignore") as f:
                 cota_favorit = cota_2
 
             cote_goluri = [n for n in cote_meci if 1.30 <= n <= 3.50]
-            cota_peste_2_5 = cote_goluri[0] if len(cote_goluri) > 3 else (cota_favorit * 1.1)
-            cota_peste_3_5 = cote_goluri[1] if len(cote_goluri) > 4 else (cota_peste_2_5 * 1.4)
+            cota_peste_2_5 = cote_goluri[0] if len(cote_goluri) > 0 else (cota_favorit * 1.1)
+            cota_peste_3_5 = cote_goluri[1] if len(cote_goluri) > 1 else (cota_peste_2_5 * 1.4)
 
-            # ⚙️ Distribuirea pe bilete
-            selectii_combo.append({
-                "meci": nume_meci, "detalii": detalii,
-                "pariu": f"{sansa_dubla} & Peste 1.5 Goluri", "cota": round(max(1.20, cota_sd), 2)
-            })
+            # ⚙️ DISTRIBUIREA PE BILETE CU FILTRELE TALE DE ISTORIC MINIM
+            
+            # --- 1. BILET COMBO: Minim 12 meciuri jucate (home_played și away_played >= 12) ---
+            if home_played >= 12 and away_played >= 12:
+                selectii_combo.append({
+                    "meci": nume_meci, "detalii": detalii,
+                    "pariu": f"{sansa_dubla} & Peste 1.5 Goluri", "cota": round(max(1.20, cota_sd), 2)
+                })
 
-            if cota_peste_2_5 > 1.40:
-                pariu_echilibrat = "Peste 2.5 Goluri (AR)"
-                cota_echil = cota_peste_2_5
-            else:
-                pariu_echilibrat = f"Victorie Favorit ({favorit_text})"
-                cota_echil = cota_favorit
+            # --- 2. BILET ECHILIBRAT: Minim 7 meciuri jucate ---
+            if home_played >= 7 and away_played >= 7:
+                if cota_peste_2_5 > 1.40:
+                    pariu_echilibrat = "Peste 2.5 Goluri (AR)"
+                    cota_echil = cota_peste_2_5
+                else:
+                    pariu_echilibrat = f"Victorie Favorit ({favorit_text})"
+                    cota_echil = cota_favorit
 
-            selectii_echilibrat.append({
-                "meci": nume_meci, "detalii": detalii,
-                "pariu": pariu_echilibrat, "cota": round(max(1.45, cota_echil), 2)
-            })
+                selectii_echilibrat.append({
+                    "meci": nume_meci, "detalii": detalii,
+                    "pariu": pariu_echilibrat, "cota": round(max(1.45, cota_echil), 2)
+                })
 
-            cota_bomba = max(cota_peste_3_5, cota_favorit * 1.5)
-            if cota_bomba < 2.20:
-                cota_bomba = 2.40
-                
-            selectii_mari.append({
-                "meci": nume_meci, "detalii": detalii,
-                "pariu": "Peste 3.5 Goluri (AT)", "cota": round(cota_bomba, 2)
-            })
+            # --- 3. BILET COTE MARI: Minim 5 meciuri jucate ---
+            if home_played >= 5 and away_played >= 5:
+                cota_bomba = max(cota_peste_3_5, cota_favorit * 1.5)
+                if cota_bomba < 2.20:
+                    cota_bomba = 2.40
+                    
+                selectii_mari.append({
+                    "meci": nume_meci, "detalii": detalii,
+                    "pariu": "Peste 3.5 Goluri (AT)", "cota": round(cota_bomba, 2)
+                })
 
         except Exception:
             continue
 
-# 📊 AFISARE PE 3 COLOANE SIMETRICE
+# 📊 AFISARE PE 3 COLOANE SIMETRICE STIL PROGRAM44
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -118,7 +131,7 @@ with col1:
         cota_totala_combo *= s["cota"]
     
     st.markdown(f"**Cota Totală:** <span style='color:#00cc66; font-size:24px; font-weight:bold;'>{cota_totala_combo:.2f}</span>", unsafe_allow_html=True)
-    st.caption("✔️ Pariuri de tip Șansă Dublă / Total Goluri sigure")
+    st.caption("✔️ Min. 12 meciuri jucate | Șansă Dublă & Goluri sigure")
     st.markdown("---")
     
     for s in meciuri_combo_bilet:
@@ -126,6 +139,8 @@ with col1:
     
     if meciuri_combo_bilet:
         st.info(f"💰 Miza: 20 RON ➡️ Câștig potențial: {20 * cota_totala_combo:.1f} RON")
+    else:
+        st.info("Nu sunt meciuri cu istoric de min. 12 meciuri pentru biletul Combo.")
 
 with col2:
     st.markdown("### ⚖️ Bilet Echilibrat")
@@ -135,7 +150,7 @@ with col2:
         cota_totala_echilibrat *= s["cota"]
         
     st.markdown(f"**Cota Totală:** <span style='color:#ffcc00; font-size:24px; font-weight:bold;'>{cota_totala_echilibrat:.2f}</span>", unsafe_allow_html=True)
-    st.caption("⚠️ 3-4 Selecții de soliști sau goluri competitive")
+    st.caption("⚠️ Min. 7 meciuri jucate | Soliști sau Peste 2.5 AR")
     st.markdown("---")
     
     for s in meciuri_echilibrat_bilet:
@@ -143,6 +158,8 @@ with col2:
         
     if meciuri_echilibrat_bilet:
         st.success(f"💰 Miza: 10 RON ➡️ Câștig potențial: {10 * cota_totala_echilibrat:.1f} RON")
+    else:
+        st.info("Nu sunt meciuri cu istoric de min. 7 meciuri pentru biletul Echilibrat.")
 
 with col3:
     st.markdown("### 💣 Bilet Cote Mari")
@@ -152,7 +169,7 @@ with col3:
         cota_totala_mari *= s["cota"]
         
     st.markdown(f"**Cota Totală:** <span style='color:#ff3333; font-size:24px; font-weight:bold;'>{cota_totala_mari:.2f}</span>", unsafe_allow_html=True)
-    st.caption("🚀 Fiecare selecție individuală are cotă mare")
+    st.caption("🚀 Min. 5 meciuri jucate | Peste 3.5 AT / Bombe")
     st.markdown("---")
     
     for s in meciuri_mari_bilet:
@@ -160,3 +177,5 @@ with col3:
         
     if meciuri_mari_bilet:
         st.warning(f"💰 Miza: 5 RON ➡️ Câștig potențial: {5 * cota_totala_mari:.1f} RON")
+    else:
+        st.info("Nu sunt meciuri cu istoric de min. 5 meciuri pentru biletul de Cote Mari.")
