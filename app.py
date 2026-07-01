@@ -2,32 +2,41 @@ import streamlit as st
 import pandas as pd
 
 from utils.filters import filter_matches
-from utils.predictions import generate_predictions
+from utils.predictions import (
+    generate_predictions,
+    generate_bilet_sigur,
+    generate_bilet_combo,
+    generate_bilet_bomba
+)
 
-st.title("Biletul Miliardar – BetMachine Pro 55 ULTRA")
+st.title("BetMachine Pro 55 ULTRA – Generator de Bilete")
 
 @st.cache_data
 def load_data():
     return pd.read_csv("scores24.csv")
 
-# 1. Încărcăm CSV-ul
 df = load_data()
-
-# 2. Aplicăm filtrarea (AX/AY + probabilități)
 df_filtered = filter_matches(df)
 
-# 3. Generăm predicțiile
-tickets = generate_predictions(df_filtered)
-
-# 4. Afișăm biletul miliardar
 st.subheader("Biletul Miliardar")
+tickets = generate_predictions(df_filtered)
+for t in tickets:
+    st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
 
-if len(tickets) == 0:
-    st.warning("Nu există meciuri care să respecte regulile.")
-else:
-    for t in tickets[:8]:
-        st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+st.subheader("Bilet SIGUR")
+sigur = generate_bilet_sigur(df_filtered)
+for t in sigur:
+    st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
 
-# 5. Afișăm tabelul cu meciurile filtrate
+st.subheader("Bilet COMBO")
+combo = generate_bilet_combo(df_filtered)
+for t in combo:
+    st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+
+st.subheader("Bilet BOMBĂ")
+bomba = generate_bilet_bomba(df_filtered)
+for t in bomba:
+    st.write(f"**{t['league']}** — {t['home']} vs {t['away']} → **{t['prediction']}**")
+
 st.subheader("Meciuri filtrate")
 st.dataframe(df_filtered)
